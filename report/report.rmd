@@ -13,6 +13,8 @@ library(dplyr)
 library(mice)
 library(chemometrics)
 library(car)
+library(effects)
+
 
 # Clear plots
 if(!is.null(dev.list())) dev.off()
@@ -124,6 +126,7 @@ We decided to impute it with mice and to validate it with summary and plot. We o
 #summary(df1)
 sum(is.na(df1$TotalCharges))
 
+df1
 #imputation - mice
 mice_imp<-mice(df1,method = "cart")
 df2<-complete(mice_imp)
@@ -172,9 +175,46 @@ To create a model, first we split the train data (df2) into train_new and test_n
 
 ```{r}
 set.seed(123)
-rows <- sample(nrow(df2), .7 * nrow(df2))
+rows <- sample(nrow(df2), .75 * nrow(df2))
 train_new <- df2[rows, ]
 test_new <- df2[-rows, ]
+
+## Start with the numeric variables 
+
+attach(train_new)
+mod_num <- glm(Churn ~ tenure + TotalCharges + MonthlyCharges, family = "binomial", data=train_new )
+vif(mod_num) ## We can see high correlation between Total Charges and tenure. We will keep tenure as it is the most
+
+mod_num2 <- glm(Churn ~ tenure + MonthlyCharges, family = "binomial", data=train_new )
+vif(mod_num2) ## There is not multicorrelation 
+
+# Let's check if interactions may be needed
+
+mod_num3 <- glm(Churn ~ tenure*MonthlyCharges, family="binomial", data=train_new)
+anova(mod_num2, mod_num3, test = "Chisq") # Not significant
+
+
+# 
+
+mod_num4 <- glm(Churn ~ tenure + log(MonthlyCharges), family = binomial, data=train_new)
+mod_num4
+
+
+
+AIC(mod_num2);AIC(mod_num4) ## It is better without transformation
+
+
+## Let's check for polinomial transformations
+mod_num5 <- glm(Churn ~ poly(tenure,2) + poly(MonthlyCharges,2), family = binomial, data=train_new)
+summary(mod_num5)
+anova(mod_num2, mod_num5, test="Chisq") ## It is significant but MonthlyCharges is not significant
+
+
+mod_num6 <- glm(Churn ~ poly(tenure,2) + MonthlyCharges, family = binomial, data=train_new)
+
+anova(mod_num6, mod_num5, test="Chisq") ## We will keep model 6. We could try to make polinomial of higher degrees but would be complicated to understand. 
+
+plot(allEffects( mod_num6 )) ## We can see how tenure slope is smoothed in high tenure. 
 
 ```
 
