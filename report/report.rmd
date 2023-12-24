@@ -173,6 +173,9 @@ summary(df2)
 ## Model Fitting
 To create a model, first we split the train data (df2) into train_new and test_new. We need the test_new to validate the accuracy of the model with data that has the target variable and the model has not used, to check if the model has overfitting
 
+
+## Modelling using numeric variables
+
 ```{r}
 set.seed(123)
 rows <- sample(nrow(df2), .75 * nrow(df2))
@@ -217,4 +220,69 @@ anova(mod_num6, mod_num5, test="Chisq") ## We will keep model 6. We could try to
 plot(allEffects( mod_num6 )) ## We can see how tenure slope is smoothed in high tenure. 
 
 ```
+## Residual analysis
+
+
+```{r}
+residualPlots( mod_num6 )
+
+## Looks pretty flat some obervations in low Monthly charges have higher residuals but is not normal as the predictor has positive correlation, so low Monthly charges with churn are less probable. 
+
+influencePlot( mod_num6 ) 
+## There are some observations that have higher residuals than expected but are not very separate from each other. Let's check the boxplot
+
+Boxplot(cooks.distance( mod_num6 ))
+
+## We have some influential values but it just because it is rare of low Monthly Charges to have a churn. We believe we should keep them in the dataset in order to not manipulate too much the model and have biased results. 
+
+
+```
+
+```{r}
+train_new
+mod <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+
+step_mod <- step(mod, trace=F)
+summary(step_mod) ## There are multiple variables that are very related with the level No Internet these generate the model to not converge in some betas. As the levels in these variables can be also categorized as No instead of No Internet Service. Also we will be able to aisle the effect of No Internet with the variable InternetService. If more NA generate all the variance will be captured with the variable InternetService. 
+
+train_new$OnlineBackup    <- train_new$OnlineBackup    %>% as.character()
+train_new$OnlineSecurity    <- train_new$OnlineSecurity    %>% as.character()
+train_new$DeviceProtection<- train_new$DeviceProtection %>% as.character()
+train_new$TechSupport     <- train_new$TechSupport     %>% as.character()
+train_new$StreamingTV     <- train_new$StreamingTV     %>% as.character()
+train_new$StreamingMovies <- train_new$StreamingMovies %>% as.character()
+
+train_new$OnlineBackup     <- ifelse(train_new$OnlineBackup == 'No internet service', 'No', train_new$OnlineBackup)
+train_new$OnlineSecurity     <- ifelse(train_new$OnlineSecurity == 'No internet service', 'No', train_new$OnlineSecurity)
+train_new$DeviceProtection <- ifelse(train_new$DeviceProtection == 'No internet service', 'No', train_new$DeviceProtection)
+train_new$TechSupport      <- ifelse(train_new$TechSupport == 'No internet service', 'No', train_new$TechSupport)
+train_new$StreamingTV      <- ifelse(train_new$StreamingTV == 'No internet service', 'No', train_new$StreamingTV)
+train_new$StreamingMovies  <- ifelse(train_new$StreamingMovies == 'No internet service', 'No', train_new$StreamingTV)
+
+train_new$OnlineBackup    <- train_new$OnlineBackup    %>% as.factor()
+train_new$OnlineSecurity    <- train_new$OnlineSecurity    %>% as.factor()
+train_new$DeviceProtection<- train_new$DeviceProtection %>% as.factor()
+train_new$TechSupport     <- train_new$TechSupport     %>% as.factor()
+train_new$StreamingTV     <- train_new$StreamingTV     %>% as.factor()
+train_new$StreamingMovies <- train_new$StreamingMovies %>% as.factor()
+
+
+mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+
+summary(mod2)
+
+
+mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineBackup + DeviceProtection + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+summary(mod2)
+vif(step_mod)
+Anova(mod, test="LR")
+
+
+```
+
+
+
+
+
+
 
