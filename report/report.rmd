@@ -14,6 +14,7 @@ library(mice)
 library(chemometrics)
 library(car)
 library(effects)
+library(FactoMineR)
 
 
 # Clear plots
@@ -174,6 +175,24 @@ summary(df2)
 To create a model, first we split the train data (df2) into train_new and test_new. We need the test_new to validate the accuracy of the model with data that has the target variable and the model has not used, to check if the model has overfitting
 
 
+
+## Profiling
+
+```{r}
+catdes(df2, num.var=which(names(df2) == 'Churn'))
+```
+
+The results from FactoMinerR::catdes() show the relationship between the variable Churn and both categorical and quantitative variables.
+
+For categorical variables, the chi-square test was used. The p-values for all variables are extremely small, indicating a significant association between these variables and the churn variable. The variables with the strongest association are 'Contract', 'f.tenure', 'OnlineSecurity', and 'TechSupport', as they have the smallest p-values.
+
+The variable churn is also described by the categories. For the 'No' cluster, the categories with the highest v.test values (indicating a strong association) are 'Contract=Two year', 'f.tenure=HighTenure', and 'StreamingMovies=No internet service'. For the 'Yes' cluster, the categories with the highest v.test values are 'Contract=Month-to-month', 'OnlineSecurity=No', and 'TechSupport=No'.
+
+For quantitative variables, the Eta2 statistic was used. The variable 'tenure' has the highest Eta2 value, indicating it has the strongest association with the cluster variable. The p-values for all variables are extremely small, indicating a significant association.
+
+The variable churn is also described by the quantitative variables. For the 'No' cluster, the variable with the highest v.test value (indicating a strong association) is 'tenure'. For the 'Yes' cluster, the variable with the highest v.test value is 'MonthlyCharges'.
+
+
 ## Modelling using numeric variables
 
 ```{r}
@@ -186,7 +205,7 @@ test_new <- df2[-rows, ]
 
 attach(train_new)
 mod_num <- glm(Churn ~ tenure + TotalCharges + MonthlyCharges, family = "binomial", data=train_new )
-vif(mod_num) ## We can see high correlation between Total Charges and tenure. We will keep tenure as it is the most
+vif(mod_num) ## We can see high correlation between Total Charges and tenure. We will keep tenure as it is the most important. 
 
 mod_num2 <- glm(Churn ~ tenure + MonthlyCharges, family = "binomial", data=train_new )
 vif(mod_num2) ## There is not multicorrelation 
@@ -241,9 +260,9 @@ Boxplot(cooks.distance( mod_num6 ))
 ```{r}
 train_new
 mod <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
-
+summary(mod)
 step_mod <- step(mod, trace=F)
-summary(step_mod) ## There are multiple variables that are very related with the level No Internet these generate the model to not converge in some betas. As the levels in these variables can be also categorized as No instead of No Internet Service. Also we will be able to aisle the effect of No Internet with the variable InternetService. If more NA generate all the variance will be captured with the variable InternetService. 
+summary(step_mod) ## There are multiple variables that are very related with the level No Internet these generate the model to not converge in some betas. As the levels in these variables can be also categorized as No instead of No Internet Service. Also we will be able to aisle the effect of No Internet with the variable InternetService. If more NA generate all the variance will be captured with the variable InternetService or other variable. 
 
 train_new$OnlineBackup    <- train_new$OnlineBackup    %>% as.character()
 train_new$OnlineSecurity    <- train_new$OnlineSecurity    %>% as.character()
@@ -267,15 +286,23 @@ train_new$StreamingTV     <- train_new$StreamingTV     %>% as.factor()
 train_new$StreamingMovies <- train_new$StreamingMovies %>% as.factor()
 
 
-mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
 
 summary(mod2)
+vif(mod2)
+## After refactoring all the variables that were related to each other we can see that Monthly charges is dependant on some of the other variables. We will remove those which are not significant and check whether we should add them or not.
 
 
-mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineBackup + DeviceProtection + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
-summary(mod2)
-vif(step_mod)
-Anova(mod, test="LR")
+Anova(mod2, test="LR")
+
+mod3 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity + OnlineBackup + TechSupport + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+Anova(mod3, test="LR")
+
+anova(mod3, mod2, test="Chisq") ## It is not significant so we can keep the small model with the principle of parsimony. 
+
+vif(mod3) ## The multicorrelation has reduced.
+
+plot(allEffects(mod3))
 
 
 ```
