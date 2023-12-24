@@ -176,7 +176,7 @@ To create a model, first we split the train data (df2) into train_new and test_n
 
 
 
-## Profiling
+## Profiling and Feature Selection
 
 ```{r}
 catdes(df2, num.var=which(names(df2) == 'Churn'))
@@ -192,6 +192,7 @@ For quantitative variables, the Eta2 statistic was used. The variable 'tenure' h
 
 The variable churn is also described by the quantitative variables. For the 'No' cluster, the variable with the highest v.test value (indicating a strong association) is 'tenure'. For the 'Yes' cluster, the variable with the highest v.test value is 'MonthlyCharges'.
 
+As all variables are significant in relation with the variable churn we will keep all of them at the moment. 
 
 ## Modelling using numeric variables
 
