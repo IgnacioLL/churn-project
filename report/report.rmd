@@ -12,6 +12,7 @@ library(DataExplorer)
 library(dplyr)
 library(mice)
 library(chemometrics)
+library(car)
 
 # Clear plots
 if(!is.null(dev.list())) dev.off()
@@ -28,57 +29,43 @@ df1 %>% glimpse
 ```
 
 # Data Preparation
-
 ## Missing data and Errors
 Checking the missing data in the dataset and which variables have NA’s we can see that the ones with missing values is TotalCharges.
 Vemos que los missings del TotalCharges son debido a que los meses que el cliente ha estado en la compañia (tenure) son 0. Entonces, totalCharges será 0 hasta que empiece el contrato, es decir que empiece el primer mes de contrato y tenure sea 1.
 ```{r, missing_data}
 #, fig.height=1.5
 
-## Duplicates observations
+# Duplicates observations
 df1 <- distinct(df1, .keep_all = TRUE)
 
-plot_missing(df1, missing_only = TRUE, group = list("Low" = 0.05, "Medium"=0.25, "High"=0.5, "Very High" =1), geom_label_args = list("size" = 2))
-
-observaciones_na <- df1 %>% filter(is.na(TotalCharges))
-print(observaciones_na)
-
-df1$TotalCharges <- ifelse(is.na(df1$TotalCharges) & df1$tenure == 0, 0, df1$TotalCharges)
-
-#inconsistencias con el No phone service
-if(identical(table(df1$PhoneService)[["No"]], table(df1$MultipleLines)[["No phone service"]])){
-  cat("It doesn't exist an inconsistency with the factor 'No phone service'.\n")
-}else {
-  cat("Error: It exists an inconsistency with the factor 'No phone service'.\n")
-}
-
-#inconsistencias con el No internet service
-if (!all(identical(table(df1$InternetService)[["No"]], table(df1$OnlineSecurity)[["No internet service"]]),
-         identical(table(df1$InternetService)[["No"]], table(df1$OnlineBackup)[["No internet service"]]),
-         identical(table(df1$InternetService)[["No"]], table(df1$DeviceProtection)[["No internet service"]]),
-         identical(table(df1$InternetService)[["No"]], table(df1$TechSupport)[["No internet service"]]),
-         identical(table(df1$InternetService)[["No"]], table(df1$StreamingTV)[["No internet service"]]),
-         identical(table(df1$InternetService)[["No"]], table(df1$StreamingMovies)[["No internet service"]]))) {
-  cat("Error: It exists an inconsistency with the factor 'No internet service'.\n")
-} else {
-  cat("It doesn't exist an inconsistency with the factor 'No internet service'.\n")
-}
-```
-
-## Categorical values
-```{r, categorical_plot}
+# Numeric to factor SeniorCitizen
 df1$SeniorCitizen <- df1$SeniorCitizen %>% as.factor()
 
-#quitar el costumerID
+# Take off the variable customerID
 df1 <- subset(df1, select = -customerID)
 
 cat_keep <- names(df1)[sapply(df1, function(x) is.character(x))]
 numeric_columns <-  names(df1)[sapply(df1, function(x) is.numeric(x))]
 
 df1[cat_keep] <- lapply(df1[cat_keep], as.factor) ## Create Factors
-df1[numeric_columns] <- lapply(df1[numeric_columns], as.numeric) # es necesario???
+df1[numeric_columns] <- lapply(df1[numeric_columns], as.numeric)
 
+# Missing values
+plot_missing(df1, missing_only = TRUE, group = list("Low" = 0.05, "Medium"=0.25, "High"=0.5, "Very High" =1), geom_label_args = list("size" = 2))
 
+observaciones_na <- df1 %>% filter(is.na(TotalCharges))
+print(observaciones_na$tenure)
+
+# Errors or inconsistencies
+df1$TotalCharges <- ifelse(is.na(df1$TotalCharges) & df1$tenure == 0, 0, df1$TotalCharges)
+
+#inconsistencias con el No phone service o No internet service
+summary(df1) # misma frec de no phone y internet service en las variables
+```
+
+# Variable analysis
+## Categorical values
+```{r, categorical_plot}
 p1 <- df1 %>% 
   select(all_of(cat_keep)) %>%
   pivot_longer(cols=everything()) %>%
@@ -87,7 +74,6 @@ p1 <- df1 %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   facet_wrap(~name, scales="free", ncol=4)
 p1
-
 
 ```
 
@@ -103,31 +89,9 @@ p2 <- df1 %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   facet_wrap(~name, scales="free", ncol=4)
 p2
-```
 
-## Univariate outliers
-### Tenure
-```{r, fig.height=3.5}
-
+# Create a discretization of numeric variables
 sm <- summary(df1$tenure)
-iqr <- sm["3rd Qu."] - sm["1st Qu."]
-# Mild Outliers
-mild_ub <- sm["3rd Qu."] + 1.5 * iqr
-mild_lb <- sm["1st Qu."] - 1.5 * iqr
-mild_outliers <- length(which(df1$tenure > mild_ub | df1$tenure < mild_lb))
-cat("Number of mild outliers tenure:", mild_outliers, "\n")
-boxplot(df1$tenure, main = paste("Outlier Analysis for tenure"),
-        ylab = "tenure", outline = TRUE)
-abline(h = mild_ub, col = "orange", lwd = 2)
-abline(h = mild_lb, col = "orange", lwd = 2)
-# Severe Outliers
-severe_ub <- sm["3rd Qu."] + 3 * iqr
-severe_lb <- sm["1st Qu."] - 3 * iqr
-severe_outliers <- length(which(df1$tenure > severe_ub | df1$tenure < severe_lb))
-cat("Number of severe outliers tenure:", severe_outliers, "\n")
-abline(h = severe_ub, col = "red", lwd = 2.5)
-abline(h = severe_lb, col = "red", lwd = 2.5)
-# create a discretization of tenure numeric variable
 df1$f.tenure <- ifelse(df1$tenure <= sm["1st Qu."], 1, 
                ifelse(df1$tenure > sm["1st Qu."] & df1$tenure <= sm["Mean"], 2,
                ifelse(df1$tenure > sm["Mean"] & df1$tenure <= sm["3rd Qu."], 3, 
@@ -135,29 +99,7 @@ df1$f.tenure <- ifelse(df1$tenure <= sm["1st Qu."], 1,
 df1$f.tenure <- factor(df1$f.tenure, labels=c("LowTenure","LowMidTenure","HighMidTenure","HighTenure"), order = T, levels=c(1,2,3,4))
 table(df1$f.tenure)
 
-```
-### MonthlyCharges
-```{r, fig.height=3.5}
-
 sm <- summary(df1$MonthlyCharges)
-iqr <- sm["3rd Qu."] - sm["1st Qu."]
-# Mild Outliers
-mild_ub <- sm["3rd Qu."] + 1.5 * iqr
-mild_lb <- sm["1st Qu."] - 1.5 * iqr
-mild_outliers <- length(which(df1$MonthlyCharges > mild_ub | df1$MonthlyCharges < mild_lb))
-cat("Number of mild outliers MonthlyCharges:", mild_outliers, "\n")
-boxplot(df1$MonthlyCharges, main = paste("Outlier Analysis for MonthlyCharges"),
-        ylab = "MonthlyCharges", outline = TRUE)
-abline(h = mild_ub, col = "orange", lwd = 2)
-abline(h = mild_lb, col = "orange", lwd = 2)
-# Severe Outliers
-severe_ub <- sm["3rd Qu."] + 3 * iqr
-severe_lb <- sm["1st Qu."] - 3 * iqr
-severe_outliers <- length(which(df1$MonthlyCharges > severe_ub | df1$MonthlyCharges < severe_lb))
-cat("Number of severe outliers MonthlyCharges:", severe_outliers, "\n")
-abline(h = severe_ub, col = "red", lwd = 2.5)
-abline(h = severe_lb, col = "red", lwd = 2.5)
-# create a discretization of MonthlyCharges numeric variable
 df1$f.MonthlyCharges <- ifelse(df1$MonthlyCharges <= sm["1st Qu."], 1, 
                ifelse(df1$MonthlyCharges > sm["1st Qu."] & df1$MonthlyCharges <= sm["Mean"], 2,
                ifelse(df1$MonthlyCharges > sm["Mean"] & df1$MonthlyCharges <= sm["3rd Qu."], 3, 
@@ -165,29 +107,7 @@ df1$f.MonthlyCharges <- ifelse(df1$MonthlyCharges <= sm["1st Qu."], 1,
 df1$f.MonthlyCharges <- factor(df1$f.MonthlyCharges, labels=c("LowMonthlyCharges","LowMidMonthlyCharges","HighMidMonthlyCharges","HighMonthlyCharges"), order = T, levels=c(1,2,3,4))
 table(df1$f.MonthlyCharges)
 
-```
-### TotalCharges
-```{r, fig.height=3.5}
-
 sm <- summary(df1$TotalCharges)
-iqr <- sm["3rd Qu."] - sm["1st Qu."]
-# Mild Outliers
-mild_ub <- sm["3rd Qu."] + 1.5 * iqr
-mild_lb <- sm["1st Qu."] - 1.5 * iqr
-mild_outliers <- length(which(df1$TotalCharges > mild_ub | df1$TotalCharges < mild_lb))
-cat("Number of mild outliers TotalCharges:", mild_outliers, "\n")
-boxplot(df1$TotalCharges, main = paste("Outlier Analysis for TotalCharges"),
-        ylab = "TotalCharges", outline = TRUE)
-abline(h = mild_ub, col = "orange", lwd = 2)
-abline(h = mild_lb, col = "orange", lwd = 2)
-# Severe Outliers
-severe_ub <- sm["3rd Qu."] + 3 * iqr
-severe_lb <- sm["1st Qu."] - 3 * iqr
-severe_outliers <- length(which(df1$TotalCharges > severe_ub | df1$TotalCharges < severe_lb))
-cat("Number of severe outliers TotalCharges:", severe_outliers, "\n")
-abline(h = severe_ub, col = "red", lwd = 2.5)
-abline(h = severe_lb, col = "red", lwd = 2.5)
-# create a discretization of TotalCharges numeric variable
 df1$f.TotalCharges <- ifelse(df1$TotalCharges <= sm["1st Qu."], 1, 
                ifelse(df1$TotalCharges > sm["1st Qu."] & df1$TotalCharges <= sm["Mean"], 2,
                ifelse(df1$TotalCharges > sm["Mean"] & df1$TotalCharges <= sm["3rd Qu."], 3, 
@@ -195,6 +115,8 @@ df1$f.TotalCharges <- ifelse(df1$TotalCharges <= sm["1st Qu."], 1,
 df1$f.TotalCharges <- factor(df1$f.TotalCharges, labels=c("LowTotalCharges","LowMidTotalCharges","HighMidTotalCharges","HighTotalCharges"), order = T, levels=c(1,2,3,4))
 table(df1$f.TotalCharges)
 ```
+# Data Quality Report
+
 ## Imputation Missing data
 HE CAMBIADO LOS NA'S DE TOTALCHARGES ASI QUE ESTE APARTADO CAMBIA
 We decided to impute it with mice and to validate it with summary and plot. We observe that the imputation doesn’t have a significant change in the density nor the summary.
@@ -216,10 +138,16 @@ plot(density(df2$TotalCharges,na.rm=TRUE), main = "Density Imputed TotalCharges"
      xlab = "TotalCharges", ylab = "Density")
 ```
 
+## Univariate outliers variable
+crear variable de recuento de outliers para mirar correlations
+
+
+
 ## Multivariate outliers
 A threshold of 0.5% is chosen as signficance level because this returns some outliers.
 Como se muestra en la comparacion de summary, los multivariate outliers son personas que no son senior citizen, tienen pareja y personas dependientes mayoritariamente, todas tienes phone service, ninguno tiene internet service, tienen un contrato de 2 años y ninguno ha churned.
 ```{r}
+df2 <- df1
 df_of_interest <- df2[,c(numeric_columns)]
 
 res.out = Moutlier(df_of_interest, quantile = 0.995, col="green") #0.9995
