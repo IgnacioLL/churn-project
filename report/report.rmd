@@ -59,17 +59,27 @@ plot_missing(df1, missing_only = TRUE, group = list("Low" = 0.05, "Medium"=0.25,
 observaciones_na <- df1 %>% filter(is.na(TotalCharges))
 print(observaciones_na$tenure)
 
-# Errors or inconsistencies
-df1$TotalCharges <- ifelse(is.na(df1$TotalCharges) & df1$tenure == 0, 0, df1$TotalCharges)
+# Errors or inconsistencies -> imputed
+df2 <- df1
+df2$TotalCharges <- ifelse(is.na(df2$TotalCharges) & df2$tenure == 0, 0, df2$TotalCharges)
+
+# validation
+summary(df2$TotalCharges)
+summary(df1$TotalCharges)
+par(mfrow=c(1,2))
+plot(density(df1$TotalCharges,na.rm=TRUE), main = "Density TotalCharges", 
+     xlab = "TotalCharges", ylab = "Density")
+plot(density(df2$TotalCharges,na.rm=TRUE), main = "Density Imputed TotalCharges", 
+     xlab = "TotalCharges", ylab = "Density")
 
 #inconsistencias con el No phone service o No internet service
-summary(df1) # misma frec de no phone y internet service en las variables
+summary(df2) # misma frec de no phone y internet service en las variables
 ```
 
 # Variable analysis
 ## Categorical values
 ```{r, categorical_plot}
-p1 <- df1 %>% 
+p1 <- df2 %>% 
   select(all_of(cat_keep)) %>%
   pivot_longer(cols=everything()) %>%
   ggplot(data=.) +
@@ -84,7 +94,7 @@ p1
 
 ```{r, num_graphs}
 #, fig.height=20
-p2 <- df1 %>% 
+p2 <- df2 %>% 
   select(all_of(numeric_columns)) %>%
   pivot_longer(cols=everything()) %>%
   ggplot(data=.) +
@@ -94,64 +104,36 @@ p2 <- df1 %>%
 p2
 
 # Create a discretization of numeric variables
-sm <- summary(df1$tenure)
-df1$f.tenure <- ifelse(df1$tenure <= sm["1st Qu."], 1, 
-               ifelse(df1$tenure > sm["1st Qu."] & df1$tenure <= sm["Mean"], 2,
-               ifelse(df1$tenure > sm["Mean"] & df1$tenure <= sm["3rd Qu."], 3, 
-               ifelse(df1$tenure > sm["3rd Qu."], 4,0))))
-df1$f.tenure <- factor(df1$f.tenure, labels=c("LowTenure","LowMidTenure","HighMidTenure","HighTenure"), order = T, levels=c(1,2,3,4))
-table(df1$f.tenure)
+sm <- summary(df2$tenure)
+df2$f.tenure <- ifelse(df2$tenure <= sm["1st Qu."], 1, 
+               ifelse(df2$tenure > sm["1st Qu."] & df2$tenure <= sm["Mean"], 2,
+               ifelse(df2$tenure > sm["Mean"] & df2$tenure <= sm["3rd Qu."], 3, 
+               ifelse(df2$tenure > sm["3rd Qu."], 4,0))))
+df2$f.tenure <- factor(df2$f.tenure, labels=c("LowTenure","LowMidTenure","HighMidTenure","HighTenure"), order = T, levels=c(1,2,3,4))
+table(df2$f.tenure)
 
-sm <- summary(df1$MonthlyCharges)
-df1$f.MonthlyCharges <- ifelse(df1$MonthlyCharges <= sm["1st Qu."], 1, 
-               ifelse(df1$MonthlyCharges > sm["1st Qu."] & df1$MonthlyCharges <= sm["Mean"], 2,
-               ifelse(df1$MonthlyCharges > sm["Mean"] & df1$MonthlyCharges <= sm["3rd Qu."], 3, 
-               ifelse(df1$MonthlyCharges > sm["3rd Qu."], 4,0))))
-df1$f.MonthlyCharges <- factor(df1$f.MonthlyCharges, labels=c("LowMonthlyCharges","LowMidMonthlyCharges","HighMidMonthlyCharges","HighMonthlyCharges"), order = T, levels=c(1,2,3,4))
-table(df1$f.MonthlyCharges)
+sm <- summary(df2$MonthlyCharges)
+df2$f.MonthlyCharges <- ifelse(df2$MonthlyCharges <= sm["1st Qu."], 1, 
+               ifelse(df2$MonthlyCharges > sm["1st Qu."] & df2$MonthlyCharges <= sm["Mean"], 2,
+               ifelse(df2$MonthlyCharges > sm["Mean"] & df2$MonthlyCharges <= sm["3rd Qu."], 3, 
+               ifelse(df2$MonthlyCharges > sm["3rd Qu."], 4,0))))
+df2$f.MonthlyCharges <- factor(df2$f.MonthlyCharges, labels=c("LowMonthlyCharges","LowMidMonthlyCharges","HighMidMonthlyCharges","HighMonthlyCharges"), order = T, levels=c(1,2,3,4))
+table(df2$f.MonthlyCharges)
 
-sm <- summary(df1$TotalCharges)
-df1$f.TotalCharges <- ifelse(df1$TotalCharges <= sm["1st Qu."], 1, 
-               ifelse(df1$TotalCharges > sm["1st Qu."] & df1$TotalCharges <= sm["Mean"], 2,
-               ifelse(df1$TotalCharges > sm["Mean"] & df1$TotalCharges <= sm["3rd Qu."], 3, 
-               ifelse(df1$TotalCharges > sm["3rd Qu."], 4,0))))
-df1$f.TotalCharges <- factor(df1$f.TotalCharges, labels=c("LowTotalCharges","LowMidTotalCharges","HighMidTotalCharges","HighTotalCharges"), order = T, levels=c(1,2,3,4))
-table(df1$f.TotalCharges)
+sm <- summary(df2$TotalCharges)
+df2$f.TotalCharges <- ifelse(df2$TotalCharges <= sm["1st Qu."], 1, 
+               ifelse(df2$TotalCharges > sm["1st Qu."] & df2$TotalCharges <= sm["Mean"], 2,
+               ifelse(df2$TotalCharges > sm["Mean"] & df2$TotalCharges <= sm["3rd Qu."], 3, 
+               ifelse(df2$TotalCharges > sm["3rd Qu."], 4,0))))
+df2$f.TotalCharges <- factor(df2$f.TotalCharges, labels=c("LowTotalCharges","LowMidTotalCharges","HighMidTotalCharges","HighTotalCharges"), order = T, levels=c(1,2,3,4))
+table(df2$f.TotalCharges)
 ```
 # Data Quality Report
-
-## Imputation Missing data
-HE CAMBIADO LOS NA'S DE TOTALCHARGES ASI QUE ESTE APARTADO CAMBIA
-We decided to impute it with mice and to validate it with summary and plot. We observe that the imputation doesn’t have a significant change in the density nor the summary.
-```{r}
-#summary(df1)
-sum(is.na(df1$TotalCharges))
-
-df1
-#imputation - mice
-mice_imp<-mice(df1,method = "cart")
-df2<-complete(mice_imp)
-
-#validation
-summary(df2$TotalCharges)
-summary(df1$TotalCharges)
-par(mfrow=c(1,2))
-plot(density(df1$TotalCharges,na.rm=TRUE), main = "Density TotalCharges", 
-     xlab = "TotalCharges", ylab = "Density")
-plot(density(df2$TotalCharges,na.rm=TRUE), main = "Density Imputed TotalCharges", 
-     xlab = "TotalCharges", ylab = "Density")
-```
-
-## Univariate outliers variable
-crear variable de recuento de outliers para mirar correlations
-
-
 
 ## Multivariate outliers
 A threshold of 0.5% is chosen as signficance level because this returns some outliers.
 Como se muestra en la comparacion de summary, los multivariate outliers son personas que no son senior citizen, tienen pareja y personas dependientes mayoritariamente, todas tienes phone service, ninguno tiene internet service, tienen un contrato de 2 años y ninguno ha churned.
 ```{r}
-df2 <- df1
 df_of_interest <- df2[,c(numeric_columns)]
 
 res.out = Moutlier(df_of_interest, quantile = 0.995, col="green") #0.9995
@@ -171,31 +153,34 @@ summary(df2)
 #df2 = df2[-which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff)),]
 ```
 
-## Model Fitting
-To create a model, first we split the train data (df2) into train_new and test_new. We need the test_new to validate the accuracy of the model with data that has the target variable and the model has not used, to check if the model has overfitting
 
+# Profiling and Feature Selection
 
+## Serial correlation in the response variable
+Analyzing the autocorrelation function (acf) plot, it appears that the Churn variable lacks significant and consistent autocorrelation. This suggests that the variable is likely to represent a random or stationary time series.
+```{r}
+acf(df2$Churn)
+```
+##  Interactions between categorical and numerical variables
+The results from FactoMinerR::catdes() show the relationship between the variable Churn and both categorical and quantitative variables.
 
-## Profiling and Feature Selection
+For categorical variables, the chi-square test was used. The p-values for all variables are extremely small, indicating a significant association between these variables and the Churn variable. The variables with the strongest association are 'Contract', 'f.tenure', 'OnlineSecurity', and 'TechSupport', as they have the smallest p-values.
 
+The variable Churn is also described by the categories. For the 'No' cluster, the categories with the highest v.test values (indicating a strong association) are 'Contract=Two year', 'f.tenure=HighTenure', and 'StreamingMovies=No internet service'. For the 'Yes' cluster, the categories with the highest v.test values are 'Contract=Month-to-month', 'OnlineSecurity=No', and 'TechSupport=No'.
+
+For quantitative variables, the Eta2 statistic was used. The variable 'tenure' has the highest Eta2 value, indicating it has the strongest association with the cluster variable. The p-values for all variables are extremely small, indicating a significant association.
+
+The variable Churn is also described by the quantitative variables. For the 'No' cluster, the variable with the highest v.test value (indicating a strong association) is 'tenure'. For the 'Yes' cluster, the variable with the highest v.test value is 'MonthlyCharges'.
+
+As all variables are significant in relation with the variable Churn we will keep all of them at the moment. 
 ```{r}
 catdes(df2, num.var=which(names(df2) == 'Churn'))
 ```
 
-The results from FactoMinerR::catdes() show the relationship between the variable Churn and both categorical and quantitative variables.
-
-For categorical variables, the chi-square test was used. The p-values for all variables are extremely small, indicating a significant association between these variables and the churn variable. The variables with the strongest association are 'Contract', 'f.tenure', 'OnlineSecurity', and 'TechSupport', as they have the smallest p-values.
-
-The variable churn is also described by the categories. For the 'No' cluster, the categories with the highest v.test values (indicating a strong association) are 'Contract=Two year', 'f.tenure=HighTenure', and 'StreamingMovies=No internet service'. For the 'Yes' cluster, the categories with the highest v.test values are 'Contract=Month-to-month', 'OnlineSecurity=No', and 'TechSupport=No'.
-
-For quantitative variables, the Eta2 statistic was used. The variable 'tenure' has the highest Eta2 value, indicating it has the strongest association with the cluster variable. The p-values for all variables are extremely small, indicating a significant association.
-
-The variable churn is also described by the quantitative variables. For the 'No' cluster, the variable with the highest v.test value (indicating a strong association) is 'tenure'. For the 'Yes' cluster, the variable with the highest v.test value is 'MonthlyCharges'.
-
-As all variables are significant in relation with the variable churn we will keep all of them at the moment. 
-
+# Churn Modelling
 ## Modelling using numeric variables
-
+First, we built a model using only the numerical variables of our dataset. When looking at the first model, with the vif function, we observe that there exists a high correlation between Total Charges and tenure. We will keep tenure variable, because TotalCharges is the variable that is created from tenure, in order to simplify and exclude redundant variables. 
+Interactions
 ```{r}
 set.seed(123)
 rows <- sample(nrow(df2), .75 * nrow(df2))
@@ -217,17 +202,17 @@ mod_num3 <- glm(Churn ~ tenure*MonthlyCharges, family="binomial", data=train_new
 anova(mod_num2, mod_num3, test = "Chisq") # Not significant
 
 
-# 
+mod_num2i <- glm(Churn ~ f.tenure + f.MonthlyCharges, family = "binomial", data=train_new )
+AIC(mod_num2);AIC(mod_num2i) ## It is better with the numeric variables
 
 mod_num4 <- glm(Churn ~ tenure + log(MonthlyCharges), family = binomial, data=train_new)
 mod_num4
 
 
-
 AIC(mod_num2);AIC(mod_num4) ## It is better without transformation
 
 
-## Let's check for polinomial transformations
+## Let's check for polynomial transformations
 mod_num5 <- glm(Churn ~ poly(tenure,2) + poly(MonthlyCharges,2), family = binomial, data=train_new)
 summary(mod_num5)
 anova(mod_num2, mod_num5, test="Chisq") ## It is significant but MonthlyCharges is not significant
@@ -235,18 +220,18 @@ anova(mod_num2, mod_num5, test="Chisq") ## It is significant but MonthlyCharges 
 
 mod_num6 <- glm(Churn ~ poly(tenure,2) + MonthlyCharges, family = binomial, data=train_new)
 
-anova(mod_num6, mod_num5, test="Chisq") ## We will keep model 6. We could try to make polinomial of higher degrees but would be complicated to understand. 
+anova(mod_num6, mod_num5, test="Chisq") ## We will keep model 6. We could try to make polynomial of higher degrees but would be complicated to understand. 
 
 plot(allEffects( mod_num6 )) ## We can see how tenure slope is smoothed in high tenure. 
 
 ```
-## Residual analysis
 
+## Residual analysis
 
 ```{r}
 residualPlots( mod_num6 )
 
-## Looks pretty flat some obervations in low Monthly charges have higher residuals but is not normal as the predictor has positive correlation, so low Monthly charges with churn are less probable. 
+## Looks pretty flat some observations in low Monthly charges have higher residuals but is not normal as the predictor has positive correlation, so low Monthly charges with churn are less probable. 
 
 influencePlot( mod_num6 ) 
 ## There are some observations that have higher residuals than expected but are not very separate from each other. Let's check the boxplot
@@ -257,9 +242,12 @@ Boxplot(cooks.distance( mod_num6 ))
 
 
 ```
+## Adding factor main effects to the best model containing numeric variables 
+As a last step to create our model, we introduced all our categorical variables to the model and we run step() to remove non significant predictors. 
+There are multiple variables that are very related with the level No Internet these generate the model to not converge in some betas. As the levels in these variables can be also categorized as No instead of No Internet Service. Also we will be able to aisle the effect of No Internet with the variable InternetService. If more NA generate all the variance will be captured with the variable InternetService or other variable.
 
 ```{r}
-train_new
+#train_new
 mod <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
 summary(mod)
 step_mod <- step(mod, trace=F)
@@ -291,7 +279,7 @@ mod2 <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure
 
 summary(mod2)
 vif(mod2)
-## After refactoring all the variables that were related to each other we can see that Monthly charges is dependant on some of the other variables. We will remove those which are not significant and check whether we should add them or not.
+## After refactoring all the variables that were related to each other we can see that MonthlyCharges is dependent on some of the other variables. We will remove those which are not significant and check whether we should add them or not.
 
 
 Anova(mod2, test="LR")
@@ -308,8 +296,98 @@ plot(allEffects(mod3))
 
 ```
 
+## Residual analysis with categorical variables
+
+```{r}
+
+#marginalModelPlot(mod3) # error
+residualPlots(mod3)
+influencePlot(mod3)
+cook <- Boxplot(cooks.distance(mod3))
+cookd <- sort(cooks.distance(mod3)[cook], decreasing=TRUE)
+cookd
+length(rownames(train_new) %in% names(cookd)) #[1] 5282
+
+```
 
 
+## Factor interactions
+
+glm(formula = Churn ~ SeniorCitizen + poly(tenure, 2) + MultipleLines + 
+    OnlineSecurity + OnlineBackup + TechSupport + MonthlyCharges + 
+    Contract + PaperlessBilling + MultipleLines:TechSupport + 
+    OnlineSecurity:TechSupport, family = binomial, data = train_new)
+```{r}
+
+mod4 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity + OnlineBackup + TechSupport + Contract * PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
+
+anova(mod3, mod4, test="Chisq")
+
+mod5 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity + OnlineBackup + TechSupport)*MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
+
+anova(mod3, mod5, test="Chisq")
+
+mod6 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity + OnlineBackup + TechSupport + MonthlyCharges)^2 + Contract + PaperlessBilling, data=train_new, family = binomial)
+
+step_mod <- step(mod6, trace=F) # muchas variables como para ver sus combinaciones por eso utilizamos el metodo iterativo stepwise
+summary(step_mod)
+
+mod7 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
+
+anova(mod3, mod7, test="Chisq")
+
+mod8 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity)*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
+
+anova(mod7, mod8, test="Chisq")
+
+
+```
+
+
+
+## Goodness of Fit and Model Interpretation
+
+```{r}
+marginalModelPlot(m4)
+residualPlots(m4)
+influencePlot(m4)
+avPlots(m4)
+summary(m4)
+df[c("4040"),]
+df[c("4715"),]
+sum( resid( m4, "pearson") ^2 )
+
+marginalModelPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
+
+avPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
+
+crPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
+
+residualPlots(m4, layout=c(3, 2))
+outlierTest(m4)
+par(mfrow=c(1,1))
+influencePlot(m4,id=list(n=5) )
+
+model.final <- lrm(target ~ log(city_development_index) + enrolled_university + major_discipline + company_size_col,  data=df)
+model.final
+
+m0 <- glm(target ~ 1, family="binomial", data=df)
+NagelkerkeR2(m4)
+summary(m4)
+100*(1-m4$dev/m4$null.dev)
+m4$dev
+m4$null.dev
+
+
+dadesroc<-prediction(predict(m4,type="response"),df$target)
+par(mfrow=c(1,2))
+plot(performance(dadesroc,"err"))
+plot(performance(dadesroc,"tpr","fpr"), colorize=TRUE)
+abline(0,1,lty=2)
+
+library(cvAUC)
+AUC(predict(m4,type="response"),df$target)
+```
 
 
 
