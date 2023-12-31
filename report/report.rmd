@@ -2,7 +2,9 @@
 title: "Report"
 author: "Silvia Ferrer and Ignacio Lloret"
 date: "2023-11-27"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -15,7 +17,8 @@ library(chemometrics)
 library(car)
 library(effects)
 library(FactoMineR)
-
+library(caret)
+library(Metrics)
 
 # Clear plots
 if(!is.null(dev.list())) dev.off()
@@ -389,14 +392,51 @@ length(rownames(train_new) %in% names(cookd)) #[1] 5282
 ```
 
 
-## Goodness of Fit and Model Interpretation
+## Model Interpretation and residual analysis
 
 ```{r}
-avPlots(mod7) #es como el effect
 summary(mod7)
+vif(mod7)
+exp(mod7$coefficients) 
+
+par(mfrow=c(1,2))
+plot(allEffects(mod = mod7))
+#avPlots(mod7) #es como el effect
 sum( resid( mod7, "pearson") ^2 )
 
+residualPlots(mod7)
+
 ```
+The final model has this form.
+
+$$
+\begin{align*}
+y = & -3.1427 \alpha + \beta_{\text{SeniorCitizen1}} 0.26 + \beta_{\text{tenure}} (-50.09) + \beta_{\text{tenure}^2} 23.85 \\
+& + \beta_{\text{MultipleLinesNo phone service}} 1.16 + \beta_{\text{MultipleLinesYes}} 0.14 + \beta_{\text{OnlineSecurityYes}} (-0.68) \\
+& + \beta_{\text{TechSupportYes}} (-0.64) + \beta_{\text{OnlineBackupYes}} (-0.32) + \beta_{\text{MonthlyCharges}} 0.03 \\
+& + \beta_{\text{ContractOne year}} (-0.81) + \beta_{\text{ContractTwo year}} (-2.15) + \beta_{\text{PaperlessBillingYes}} 0.35 \\
+& + \beta_{\text{OnlineSecurityYes:TechSupportYes}} 0.47
+\end{align*}
+$$
+
+From the effects plots and the betas we can draw the following conclusions:
+
+ - Senior Citizen are more likely to Churn than no Senior Citizens as the have an odds of 1.3 against non senior citizens.
+ - We can understand tenure very easily thanks to the plot of effects. We can see how old clients of the company (old in terms of months in the company) are less probable to live the company although it smoothes this behaviour as the client reaches 40 months, this is a very important variable in order to explain churns. 
+ - Those clients who don't have a phone service have an odds of 3.2 for leaving compared to those who only have 1 line.
+ - The clients who have Online Backup are less likely to live the company, with an odds of 0.72 compared to those who have not. 
+ - Monthly charges has a linear relation with the probability of Churn, in other words, the probability of leaving is higher as the Montly Charges become higher. The odds of leaving for every unit of Monthly Charges is 1.0344. This is also a very important variable in our model. 
+ - Those clients which have a shorter contract effect are more prone to leave than the others. We can see how the odds of leaving for Two year effect contracts is 0.11 compared to Month-to-Month. So the probability of leaving for those who have month-to-month contract are 9 times higher. 
+ - Paperless Billing has also an effect with an odds ratio of 1.42 of yes against no.
+ - Lastly we can check the effect of the interaction between Online Security and Tech Support. If the client has Tech Support will be less likely to leave, otherwise will be more likely to leave, especially if she/he has not Online Security either. 
+
+Residual analysis:
+
+We can see the effects on having an unbalanced dataset in our residual/Goodness of fit analysis.  We can interpret from the plots that our residuals are far more likely to have extreme positive values rather than negative ones. In fact they are very related to the conclusions of the model interpretation. As the combination of variables gets more prone to not churn we will see more influential values in the positive axis. 
+
+
+
+
 
 ### Standarize test
 
@@ -423,67 +463,64 @@ test_new$StreamingTV     <- test_new$StreamingTV     %>% as.factor()
 test_new$StreamingMovies <- test_new$StreamingMovies %>% as.factor()
 ```
 
-### Make predictions
+### Goodness of fit 
 
 ```{r}
 final_model <- mod7
 dim(test_new)
-predictions <- predict(final_model,test_new)
+predictions <- predict(final_model,test_new, type="response")
+test_new$PredictedChurn <- ifelse(predictions > 0.5,"Yes","No") %>% as.factor
+val <- table(test_new$PredictedChurn, test_new$Churn)
 
-test_new$PredictedChurn <- predictions
-res.con <- condes(test_new, num.var = 24)
-res.con$quanti
-res.con$quali
+val %>% knitr::kable()
+accuracy <- sum(diag(val))/sum(val)
+TP <- val[2,2]
+FN <- val[1,2]
+FP <- val[2,1]
 
-##
+accuracy <- sum(diag(val))/sum(val)
+Recall <- TP/(TP+FN)
+Precision <- TP / (TP + FP)
+F1 <- 2 * (Precision * Recall) / (Precision + Recall)
 
-#results <- data.frame(Model = c("Model with train_new sample","Model with test_new sample"),
-#                      RSQRT = round(c(RSQUARE(exp(fitted(final_model)), train_new$Churn),
-#                               RSQUARE(exp(predict(final_model, newdata = test_new)), test_new$Churn)),2),
-#                      RMSE = round(c(rmse(exp(fitted(final_model)), train_new$Churn),
-#                               rmse(exp(predict(final_model, newdata = test_new)), test_new$Churn)),2));results
+GOF <- rbind(accuracy, Recall, Precision, F1)
+colnames(GOF) <- "Metrics"
+GOF %>% round(2) %>% knitr::kable()
 
 
-## otra manera
 
-# #library(caret)
-# # Set seed for reproducibility
-# set.seed(123)
-# # Create an index for splitting the data
-# index <- createDataPartition(df2$Churn, p = 0.7, list = FALSE)
-# # Create training and testing datasets
-# train_new <- df2[index, ]
-# test_new <- df2[-index, ]
-# 
-# final_model2 <- mod7 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
-# # summary(final_model2)
-# #Validate
-# predictions <- predict(final_model2, newdata = test_new)
-# actual_values <- test_new$Churn
-# 
-# rmse <- sqrt(mean((predictions - actual_values)^2))
-# r_squared <- 1 - sum((actual_values - predictions)^2) / sum((actual_values - mean(actual_values))^2)
-# 
-# cat("Root Mean Squared Error (RMSE):", rmse, "\n")
-# cv_response_variable <- sd(test_new$Churn) / mean(test_new$Churn);cv_response_variable
-# cv_rmse_ratio <- rmse / mean(test_new$Churn);cv_rmse_ratio
-# 
-# cat("R-squared:", r_squared, "\n")
-# 
-# residuals <- actual_values - predictions
-# 
-# large_residual_threshold <- 2 * sd(residuals)  
-# # Identify indices of points with large residuals
-# large_residual_indices <- which(abs(residuals) > large_residual_threshold)
-# observations_with_large_residuals <- test_new[large_residual_indices, ]
-# plot(actual_values, predictions, main = "Scatter Plot with Large Residuals", xlab = "Actual Values", ylab = "Predicted Values")
-# abline(0, 1, col = "red")  # Add a diagonal line for reference
-# points(actual_values[large_residual_indices], predictions[large_residual_indices], col = "blue", pch = 16)
-# 
-# plot(actual_values, residuals, main = "Residual Plot", xlab = "Actual Values", ylab = "Residuals")
-# abline(h = 0, col = "red")  # Add a horizontal line at y = 0 for reference
-# 
-# qqPlot(residuals, main = "Quantile-Quantile Plot of Residuals")
+library("ROCR")
+dadesroc<-prediction(predict(final_model, newdata = test_new,type="response"),test_new$Churn)
+par(mfrow=c(1,2))
+plot(performance(dadesroc,"err"))
+plot(performance(dadesroc,"tpr","fpr"))
+abline(0,1,lty=2)
+
+
+predictions <- predict(final_model,test_new, type="response")
+test_new$PredictedChurn <- ifelse(predictions > 0.4,"Yes","No") %>% as.factor
+val <- table(test_new$PredictedChurn, test_new$Churn)
+
+table(test_new$PredictedChurn)
+table(test_new$Churn)
+TP <- val[2,2]
+FN <- val[1,2]
+FP <- val[2,1]
+
+accuracy <- sum(diag(val))/sum(val)
+Recall <- TP/(TP+FN)
+Precision <- TP / (TP + FP)
+F1 <- 2 * (Precision * Recall) / (Precision + Recall)
+
+GOF <- rbind(accuracy, Recall, Precision, F1)
+colnames(GOF) <- "Metrics"
+GOF %>% round(2) %>% knitr::kable()
+ ## F1 improves so we will keep the second threshold
 ```
+
+We utilized 20% of our data to establish the goodness of fit, applying the final model to predict churn within our test set. Subsequently, we applied a 0.5 threshold, obtaining an accuracy of 0.83. Notwithstanding the semblance of a good fit, misleading interpretations could arise due to an imbalanced dataset. 
+
+Exploration of the metrics table highlights a F1 score of 0.62 and a recall of 0.57, providing a clearer picture. It led us to the decision of changing the threshold to 0.4 based on the Receiver Operating Characteristic (ROC) curve. Despite a minor decrease in accuracy to 0.81, we noted an improvement in the F1 score to 0.64 and a significant increase in recall (0.68). We consider this shift important because the company is more concerned about false positives since they have a greater impact on the business than false negatives.
+
 
 
