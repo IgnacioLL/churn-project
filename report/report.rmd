@@ -33,8 +33,14 @@ df1 %>% glimpse
 
 # Data Preparation
 ## Missing data and Errors
-Checking the missing data in the dataset and which variables have NA’s we can see that the ones with missing values is TotalCharges.
-Vemos que los missings del TotalCharges son debido a que los meses que el cliente ha estado en la compañia (tenure) son 0. Entonces, totalCharges será 0 hasta que empiece el contrato, es decir que empiece el primer mes de contrato y tenure sea 1.
+Firstly, we removed possible duplicates from the dataset using the distinct function. 
+Then, we factorized the variable SeniorCitizen, as it only has two categories. 
+We then excluded the customerID variable since it is a unique categorical identifier that is not useful for the model, and analyzing its data distribution does not provide meaningful insights.
+
+Checking the missing data in the dataset and which variables have NA’s we can see that the ones with missing values is TotalCharges. Investigating the observations with missing values to understand the underlying reason, we found that all these observations have tenure=0. We decided that the most appropriate option is to manually impute these TotalCharges with 0. If the tenure is 0, it implies that the contract has not started, indicating no debt or amount to be paid. 
+We validated the imputation using density plots and confirmed that the distribution remained unchanged. Therefore, we proceeded with these imputed values.
+
+
 ```{r, missing_data}
 #, fig.height=1.5
 
@@ -78,6 +84,10 @@ summary(df2) # misma frec de no phone y internet service en las variables
 
 # Variable analysis
 ## Categorical values
+To analyze the categorical variables, we have depicted a barplot for each of them in the figure below. 
+
+One of the most relevant observations is that our response variable, Churn, is unbalanced, with significantly more negative cases than positive ones.
+
 ```{r, categorical_plot}
 p1 <- df2 %>% 
   select(all_of(cat_keep)) %>%
@@ -91,6 +101,9 @@ p1
 ```
 
 ## Numerical Data
+In order to analyze the numerical variables, we have represented a boxplot for each of them in the figure below. Notably, none of them show univariate outliers.
+
+Subsequently, we discretized each variable into four quartiles and represented them as factors. We displayed their frequency tables to verify that the data is appropriately distributed across each category.
 
 ```{r, num_graphs}
 #, fig.height=20
@@ -131,12 +144,12 @@ table(df2$f.TotalCharges)
 # Data Quality Report
 
 ## Multivariate outliers
-A threshold of 0.5% is chosen as signficance level because this returns some outliers.
-Como se muestra en la comparacion de summary, los multivariate outliers son personas que no son senior citizen, tienen pareja y personas dependientes mayoritariamente, todas tienes phone service, ninguno tiene internet service, tienen un contrato de 2 años y ninguno ha churned.
+In the initial analysis of multivariate outliers, a significance level of 0.05% was chosen as a very mild threshold. However, the vertical threshold is not visible on the graph as it extends beyond its limits. It is evident that there are no multivariate outliers beyond this threshold. We opted not to set a higher significance level because the observations are very grouped and there is no apparent clear outlier that warrants removal from the dataset.
+
 ```{r}
 df_of_interest <- df2[,c(numeric_columns)]
 
-res.out = Moutlier(df_of_interest, quantile = 0.995, col="green") #0.9995
+res.out = Moutlier(df_of_interest, quantile = 0.9995, col="green") 
 
 which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff))
 length(which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff)))
@@ -146,22 +159,32 @@ plot( res.out$md, res.out$rd )
 abline(h=res.out$cutoff, col="red")
 abline(v=res.out$cutoff, col="red")
 
-summary(df2[which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff)),])
-summary(df2)
+#summary(df2[which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff)),])
+#summary(df2)
 
-# Que hacemos con los multivariate? nos esperamos a la influential plot? Son 9 outliers
 #df2 = df2[-which((res.out$md > res.out$cutoff)&(res.out$rd > res.out$cutoff)),]
 ```
+
+## Data Quality Report
+As we have seen before, there are no univariate outliers, therefore, we have left the column empty, although it is represented to consider it as a parameter in the total quality sum. To measure missing values, we have conducted a column count, although we had already seen in the first section that the only column with missing values was TotalCharges, we have taken the values from the not imputed dataframe. Additionally, we consider it an error if the dataset has the tenure value equal to 0. Taking these metrics into account, we observe that the two variables with lower quality are tenure and TotalCharges. We do not believe it is necessary to look at another analysis per individuals to see the correlation with the variables because the two most related variables have been very explicitly identified in the analysis per variable.
+
+### Per variable
+```{r}
+dq <- data.frame(colnames(df1[, 1:20]))
+dq$outliers <- 0
+dq$missing <- 0
+dq$errors <- 0
+
+dq$missing <- (colSums(is.na(df1[, 1:20])))
+dq$errors[dq$colnames=="tenure"] <- sum(ifelse(df1$tenure == 0, 1, 0))
+dq$quality <- dq$outliers + dq$missing + dq$errors
+dq
+``` 
 
 
 # Profiling and Feature Selection
 
-## Serial correlation in the response variable
-Analyzing the autocorrelation function (acf) plot, it appears that the Churn variable lacks significant and consistent autocorrelation. This suggests that the variable is likely to represent a random or stationary time series.
-```{r}
-acf(df2$Churn)
-```
-##  Interactions between categorical and numerical variables
+##  Interactions between the target and other variables
 The results from FactoMinerR::catdes() show the relationship between the variable Churn and both categorical and quantitative variables.
 
 For categorical variables, the chi-square test was used. The p-values for all variables are extremely small, indicating a significant association between these variables and the Churn variable. The variables with the strongest association are 'Contract', 'f.tenure', 'OnlineSecurity', and 'TechSupport', as they have the smallest p-values.
@@ -179,8 +202,14 @@ catdes(df2, num.var=which(names(df2) == 'Churn'))
 
 # Churn Modelling
 ## Modelling using numeric variables
-First, we built a model using only the numerical variables of our dataset. When looking at the first model, with the vif function, we observe that there exists a high correlation between Total Charges and tenure. We will keep tenure variable, because TotalCharges is the variable that is created from tenure, in order to simplify and exclude redundant variables. 
-Interactions
+Initially, we built a model using only the numerical variables in our dataset. Upon examining the initial model with the vif function, we observe that there exists a high correlation between Total Charges and tenure. We will keep tenure variable, because TotalCharges is the variable that is created from tenure, in order to simplify and exclude redundant variables. Subsequent vif analysis confirmed the actual absence of multicorrelation.
+
+Exploring interactions between these two variables gave us insignificant differences, leading us to stay with the less complex model. We tried to exchange these numeric variables with its previously created factor variables were made, but judging by the AIC parameter, the numeric variables give us better results.
+
+Moreover, some transformations were applied to the variables. While the logarithmic transformation produced bad outcomes, the polynomial transformation significantly improved the results for tenure, although not for MonthlyCharges. Based on these findings, we kept the current best performing model which is mod_num6.
+
+Finally, we show the effect plots of the features in the best model, and we can observe that the fewer months you stay with the company (tenure), the more likely you are to leave the company (churn yes), and the same applies in the opposite direction. Instead, the fewer monthly charges you have (MonthlyCharges), the more likely you are to stay with the company (churn no), and again, the same applies in the opposite direction.
+
 ```{r}
 set.seed(123)
 rows <- sample(nrow(df2), .75 * nrow(df2))
@@ -246,6 +275,10 @@ Boxplot(cooks.distance( mod_num6 ))
 As a last step to create our model, we introduced all our categorical variables to the model and we run step() to remove non significant predictors. 
 There are multiple variables that are very related with the level No Internet these generate the model to not converge in some betas. As the levels in these variables can be also categorized as No instead of No Internet Service. Also we will be able to aisle the effect of No Internet with the variable InternetService. If more NA generate all the variance will be captured with the variable InternetService or other variable.
 
+After refactoring all the variables that were related to each other we can see that MonthlyCharges is dependent on some of the other variables. We will remove those which are not significant and check whether we should add them or not. With the anova test we can observe that the change is not significant so we can keep the small model with the principle of parsimony. Through the vif we can also see that the multicorrelation has reduced.
+
+Finally, we show the effect plots of the features in the model so we are able to define which category of Churn is more likely to happen when the feature takes the different values.
+
 ```{r}
 #train_new
 mod <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
@@ -298,9 +331,9 @@ plot(allEffects(mod3))
 
 ## Residual analysis with categorical variables
 
+
 ```{r}
 
-#marginalModelPlot(mod3) # error
 residualPlots(mod3)
 influencePlot(mod3)
 cook <- Boxplot(cooks.distance(mod3))
@@ -312,11 +345,8 @@ length(rownames(train_new) %in% names(cookd)) #[1] 5282
 
 
 ## Factor interactions
-
-glm(formula = Churn ~ SeniorCitizen + poly(tenure, 2) + MultipleLines + 
-    OnlineSecurity + OnlineBackup + TechSupport + MonthlyCharges + 
-    Contract + PaperlessBilling + MultipleLines:TechSupport + 
-    OnlineSecurity:TechSupport, family = binomial, data = train_new)
+Now, we are searching for interactions between factors in the model, beginning by testing some combinations of variables that had sense for us to have relation between them. We identify the one that yields the best results. But, given the high quantity of variables, manually exploring combinations becomes impractical. Hence, we employ the iterative stepwise method to check different combinations. The iteration providing the best results includes interactions between OnlineSecurity and TechSupport with a high representation, and MultipleLines and TechSupport with minimal representation. We tested the one with more representation alone, and then with both interactions to assess any significant improvement. However, there is no significant change observed, leading us to choose the simpler model, mod7.
+ 
 ```{r}
 
 mod4 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity + OnlineBackup + TechSupport + Contract * PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
@@ -338,57 +368,122 @@ anova(mod3, mod7, test="Chisq")
 
 mod8 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity)*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
 
-anova(mod7, mod8, test="Chisq")
+anova(mod7, mod8, test="Chisq") # no cambio significant, nos quedamos con el simple mod7
 
 
 ```
 
+
+
+## Residual analysis with the best model
+
+```{r}
+
+residualPlots(mod7)
+influencePlot(mod7)
+cook <- Boxplot(cooks.distance(mod7))
+cookd <- sort(cooks.distance(mod7)[cook], decreasing=TRUE)
+cookd
+length(rownames(train_new) %in% names(cookd)) #[1] 5282
+
+```
 
 
 ## Goodness of Fit and Model Interpretation
 
 ```{r}
-marginalModelPlot(m4)
-residualPlots(m4)
-influencePlot(m4)
-avPlots(m4)
-summary(m4)
-df[c("4040"),]
-df[c("4715"),]
-sum( resid( m4, "pearson") ^2 )
+avPlots(mod7) #es como el effect
+summary(mod7)
+sum( resid( mod7, "pearson") ^2 )
 
-marginalModelPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
-
-avPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
-
-crPlots(m4,id=list(labels=row.names(df),method=abs(cooks.distance(m4)), n=5) )
-
-residualPlots(m4, layout=c(3, 2))
-outlierTest(m4)
-par(mfrow=c(1,1))
-influencePlot(m4,id=list(n=5) )
-
-model.final <- lrm(target ~ log(city_development_index) + enrolled_university + major_discipline + company_size_col,  data=df)
-model.final
-
-m0 <- glm(target ~ 1, family="binomial", data=df)
-NagelkerkeR2(m4)
-summary(m4)
-100*(1-m4$dev/m4$null.dev)
-m4$dev
-m4$null.dev
-
-
-dadesroc<-prediction(predict(m4,type="response"),df$target)
-par(mfrow=c(1,2))
-plot(performance(dadesroc,"err"))
-plot(performance(dadesroc,"tpr","fpr"), colorize=TRUE)
-abline(0,1,lty=2)
-
-library(cvAUC)
-AUC(predict(m4,type="response"),df$target)
 ```
 
+### Standarize test
 
+```{r}
+test_new$OnlineBackup    <- test_new$OnlineBackup    %>% as.character()
+test_new$OnlineSecurity    <- test_new$OnlineSecurity    %>% as.character()
+test_new$DeviceProtection<- test_new$DeviceProtection %>% as.character()
+test_new$TechSupport     <- test_new$TechSupport     %>% as.character()
+test_new$StreamingTV     <- test_new$StreamingTV     %>% as.character()
+test_new$StreamingMovies <- test_new$StreamingMovies %>% as.character()
+
+test_new$OnlineBackup     <- ifelse(test_new$OnlineBackup == 'No internet service', 'No', test_new$OnlineBackup)
+test_new$OnlineSecurity     <- ifelse(test_new$OnlineSecurity == 'No internet service', 'No', test_new$OnlineSecurity)
+test_new$DeviceProtection <- ifelse(test_new$DeviceProtection == 'No internet service', 'No', test_new$DeviceProtection)
+test_new$TechSupport      <- ifelse(test_new$TechSupport == 'No internet service', 'No', test_new$TechSupport)
+test_new$StreamingTV      <- ifelse(test_new$StreamingTV == 'No internet service', 'No', test_new$StreamingTV)
+test_new$StreamingMovies  <- ifelse(test_new$StreamingMovies == 'No internet service', 'No', test_new$StreamingTV)
+
+test_new$OnlineBackup    <- test_new$OnlineBackup    %>% as.factor()
+test_new$OnlineSecurity    <- test_new$OnlineSecurity    %>% as.factor()
+test_new$DeviceProtection<- test_new$DeviceProtection %>% as.factor()
+test_new$TechSupport     <- test_new$TechSupport     %>% as.factor()
+test_new$StreamingTV     <- test_new$StreamingTV     %>% as.factor()
+test_new$StreamingMovies <- test_new$StreamingMovies %>% as.factor()
+```
+
+### Make predictions
+
+```{r}
+final_model <- mod7
+dim(test_new)
+predictions <- predict(final_model,test_new)
+
+test_new$PredictedChurn <- predictions
+res.con <- condes(test_new, num.var = 24)
+res.con$quanti
+res.con$quali
+
+##
+
+#results <- data.frame(Model = c("Model with train_new sample","Model with test_new sample"),
+#                      RSQRT = round(c(RSQUARE(exp(fitted(final_model)), train_new$Churn),
+#                               RSQUARE(exp(predict(final_model, newdata = test_new)), test_new$Churn)),2),
+#                      RMSE = round(c(rmse(exp(fitted(final_model)), train_new$Churn),
+#                               rmse(exp(predict(final_model, newdata = test_new)), test_new$Churn)),2));results
+
+
+## otra manera
+
+# #library(caret)
+# # Set seed for reproducibility
+# set.seed(123)
+# # Create an index for splitting the data
+# index <- createDataPartition(df2$Churn, p = 0.7, list = FALSE)
+# # Create training and testing datasets
+# train_new <- df2[index, ]
+# test_new <- df2[-index, ]
+# 
+# final_model2 <- mod7 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
+# # summary(final_model2)
+# #Validate
+# predictions <- predict(final_model2, newdata = test_new)
+# actual_values <- test_new$Churn
+# 
+# rmse <- sqrt(mean((predictions - actual_values)^2))
+# r_squared <- 1 - sum((actual_values - predictions)^2) / sum((actual_values - mean(actual_values))^2)
+# 
+# cat("Root Mean Squared Error (RMSE):", rmse, "\n")
+# cv_response_variable <- sd(test_new$Churn) / mean(test_new$Churn);cv_response_variable
+# cv_rmse_ratio <- rmse / mean(test_new$Churn);cv_rmse_ratio
+# 
+# cat("R-squared:", r_squared, "\n")
+# 
+# residuals <- actual_values - predictions
+# 
+# large_residual_threshold <- 2 * sd(residuals)  
+# # Identify indices of points with large residuals
+# large_residual_indices <- which(abs(residuals) > large_residual_threshold)
+# observations_with_large_residuals <- test_new[large_residual_indices, ]
+# plot(actual_values, predictions, main = "Scatter Plot with Large Residuals", xlab = "Actual Values", ylab = "Predicted Values")
+# abline(0, 1, col = "red")  # Add a diagonal line for reference
+# points(actual_values[large_residual_indices], predictions[large_residual_indices], col = "blue", pch = 16)
+# 
+# plot(actual_values, residuals, main = "Residual Plot", xlab = "Actual Values", ylab = "Residuals")
+# abline(h = 0, col = "red")  # Add a horizontal line at y = 0 for reference
+# 
+# qqPlot(residuals, main = "Quantile-Quantile Plot of Residuals")
+```
 
 
