@@ -4,11 +4,11 @@ Data cleaning or data scrubbing is one of the most important steps previous to a
 Data cleaning is the process that removes data that does not belong to the dataset or it is not useful for modelling purposes. Data transformation is the process of converting data from one format or structure into another format. Transformation processes can also be referred to as data wrangling, or data munging, transforming and mapping data from one "raw" data form into another format. 
 Essentially, real-world data is messy data and for model building: garbage data in is garbage out.
 
-##Aim:
+Aim:
 - Predict the probability of a customer to churn in Train and Test samples.
 - Interpret your final binary outcome model in such a way that illustrates which variables affect customer decision.
 
-##Methodological approach
+Methodological approach
 - Data Preparation
 - Exploratory Data Analysis and Model Fitting should deal with train dataset.
 - Profiling and Feature Selection
