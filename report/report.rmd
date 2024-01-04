@@ -1,10 +1,11 @@
 ---
-title: "Report"
+title: 'ASSIGNMENT 2: Telco Customer Churn'
 author: "Silvia Ferrer and Ignacio Lloret"
 date: "2023-11-27"
 output:
   word_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -44,9 +45,7 @@ Checking the missing data in the dataset and which variables have NA’s we can 
 We validated the imputation using density plots and confirmed that the distribution remained unchanged. Therefore, we proceeded with these imputed values.
 
 
-```{r, missing_data}
-#, fig.height=1.5
-
+```{r, missing_data, fig.width=5, fig.height=4}
 # Duplicates observations
 df1 <- distinct(df1, .keep_all = TRUE)
 
@@ -72,7 +71,7 @@ print(observaciones_na$tenure)
 df2 <- df1
 df2$TotalCharges <- ifelse(is.na(df2$TotalCharges) & df2$tenure == 0, 0, df2$TotalCharges)
 
-# validation
+# Validation
 summary(df2$TotalCharges)
 summary(df1$TotalCharges)
 par(mfrow=c(1,2))
@@ -81,17 +80,17 @@ plot(density(df1$TotalCharges,na.rm=TRUE), main = "Density TotalCharges",
 plot(density(df2$TotalCharges,na.rm=TRUE), main = "Density Imputed TotalCharges", 
      xlab = "TotalCharges", ylab = "Density")
 
-#inconsistencias con el No phone service o No internet service
-summary(df2) # misma frec de no phone y internet service en las variables
+#searching inconsistencies with No phone service or No internet service
+summary(df2) # same frequency of no phone and internet service in the variables
 ```
 
 # Variable analysis
 ## Categorical values
-To analyze the categorical variables, we have depicted a barplot for each of them in the figure below. 
+To analyze the categorical variables, we have depicted a bar plot for each of them in the figure below. 
 
 One of the most relevant observations is that our response variable, Churn, is unbalanced, with significantly more negative cases than positive ones.
 
-```{r, categorical_plot}
+```{r, categorical_plot, fig.width=10, fig.height=8}
 p1 <- df2 %>% 
   select(all_of(cat_keep)) %>%
   pivot_longer(cols=everything()) %>%
@@ -108,7 +107,7 @@ In order to analyze the numerical variables, we have represented a boxplot for e
 
 Subsequently, we discretized each variable into four quartiles and represented them as factors. We displayed their frequency tables to verify that the data is appropriately distributed across each category.
 
-```{r, num_graphs}
+```{r, num_graphs,fig.width=5, fig.height=3}
 #, fig.height=20
 p2 <- df2 %>% 
   select(all_of(numeric_columns)) %>%
@@ -186,7 +185,6 @@ dq
 
 
 # Profiling and Feature Selection
-
 ##  Interactions between the target and other variables
 The results from FactoMinerR::catdes() show the relationship between the variable Churn and both categorical and quantitative variables.
 
@@ -259,20 +257,18 @@ plot(allEffects( mod_num6 )) ## We can see how tenure slope is smoothed in high 
 ```
 
 ## Residual analysis
+Paying attention to the residual plot we observe that it looks pretty flat. Some observations in low MonthlyCharges have higher residuals but is not normal as the predictor has positive correlation, so low MonthlyCharges with Churn are less probable.
+
+Then, looking at the influence plot, there are some observations that have higher residuals than expected but are not very separate from each other. 
+
+Finally, the conclusions that we get from the box plot are that we have some influential values but it just because it is rare of low MonthlyCharges to have a Churn. We believe we should keep them in the dataset in order to not manipulate too much the model and have biased results. 
 
 ```{r}
 residualPlots( mod_num6 )
 
-## Looks pretty flat some observations in low Monthly charges have higher residuals but is not normal as the predictor has positive correlation, so low Monthly charges with churn are less probable. 
-
 influencePlot( mod_num6 ) 
-## There are some observations that have higher residuals than expected but are not very separate from each other. Let's check the boxplot
 
 Boxplot(cooks.distance( mod_num6 ))
-
-## We have some influential values but it just because it is rare of low Monthly Charges to have a churn. We believe we should keep them in the dataset in order to not manipulate too much the model and have biased results. 
-
-
 ```
 ## Adding factor main effects to the best model containing numeric variables 
 As a last step to create our model, we introduced all our categorical variables to the model and we run step() to remove non significant predictors. 
@@ -282,8 +278,7 @@ After refactoring all the variables that were related to each other we can see t
 
 Finally, we show the effect plots of the features in the model so we are able to define which category of Churn is more likely to happen when the feature takes the different values.
 
-```{r}
-#train_new
+```{r,fig.width=10, fig.height=8}
 mod <- glm(Churn ~ gender + SeniorCitizen +  Partner + Dependents + poly(tenure, 2) + MultipleLines + InternetService + OnlineSecurity + OnlineBackup + DeviceProtection + TechSupport + StreamingTV + StreamingMovies + Contract + PaperlessBilling + MonthlyCharges, data=train_new, family = binomial)
 summary(mod)
 step_mod <- step(mod, trace=F)
@@ -328,24 +323,27 @@ anova(mod3, mod2, test="Chisq") ## It is not significant so we can keep the smal
 vif(mod3) ## The multicorrelation has reduced.
 
 plot(allEffects(mod3))
-
-
 ```
 
 ## Residual analysis with categorical variables
+For the polynomial transformation (poly(tenure, 2) & MonthlyCharges), no systematic patterns or heteroscedasticity were observed. This suggests that the chosen transformations and the assumed linear relationships for these variables are appropriate.Regarding the factor variables, most observations are centered around 0, indicating consistent model performance across various groups. However, a few observations deviate from 0, suggesting the presence of potentially influential data points.
 
+Marginal Plots illustrate that the model aligns with the real data trend, indicating proper adaptation to variability in these predictors.
 
-```{r}
+In the influence plot, most points don't really affect the model much. However, there are a few with a high Cook's distance that could be more influential. We need to check if these points are just a bit different or if they are really unusual.
 
+In the box plot we are seeing a behavior very similar to the previous model, where we observe a lot of influential data with high cook distance.
+
+Therefore, we are following the same approach as before since we are not going to delete any of this data, in order to not manipulate too much the model and have biased results.
+```{r,warning=FALSE,fig.width=10, fig.height=6}
 residualPlots(mod3)
+marginalModelPlots(mod3)
 influencePlot(mod3)
 cook <- Boxplot(cooks.distance(mod3))
 cookd <- sort(cooks.distance(mod3)[cook], decreasing=TRUE)
 cookd
 length(rownames(train_new) %in% names(cookd)) #[1] 5282
-
 ```
-
 
 ## Factor interactions
 Now, we are searching for interactions between factors in the model, beginning by testing some combinations of variables that had sense for us to have relation between them. We identify the one that yields the best results. But, given the high quantity of variables, manually exploring combinations becomes impractical. Hence, we employ the iterative stepwise method to check different combinations. The iteration providing the best results includes interactions between OnlineSecurity and TechSupport with a high representation, and MultipleLines and TechSupport with minimal representation. We tested the one with more representation alone, and then with both interactions to assess any significant improvement. However, there is no significant change observed, leading us to choose the simpler model, mod7.
@@ -362,7 +360,7 @@ anova(mod3, mod5, test="Chisq")
 
 mod6 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity + OnlineBackup + TechSupport + MonthlyCharges)^2 + Contract + PaperlessBilling, data=train_new, family = binomial)
 
-step_mod <- step(mod6, trace=F) # muchas variables como para ver sus combinaciones por eso utilizamos el metodo iterativo stepwise
+step_mod <- step(mod6, trace=F) # Many variables make it impractical to manually explore their combinations - we employ the iterative stepwise method
 summary(step_mod)
 
 mod7 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + MultipleLines + OnlineSecurity*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
@@ -371,16 +369,30 @@ anova(mod3, mod7, test="Chisq")
 
 mod8 <- glm(Churn ~ SeniorCitizen +  poly(tenure, 2) + (MultipleLines + OnlineSecurity)*TechSupport + OnlineBackup + MonthlyCharges + Contract + PaperlessBilling, data=train_new, family = binomial)
 
-anova(mod7, mod8, test="Chisq") # no cambio significant, nos quedamos con el simple mod7
-
-
+anova(mod7, mod8, test="Chisq") # No significant changes were observed; thus, we stick with the simpler model, mod7
 ```
 
+## Model Interpretation and residual analysis
+From the effects plots and the betas we can draw the following conclusions:
 
+ - Senior Citizen are more likely to Churn than no Senior Citizens as the have an odds of 1.3 against non senior citizens.
+ - We can understand tenure very easily thanks to the plot of effects. We can see how old clients of the company (old in terms of months in the company) are less probable to live the company although it smoothes this behavior as the client reaches 40 months, this is a very important variable in order to explain churns. 
+ - Those clients who don't have a phone service have an odds of 3.2 for leaving compared to those who only have 1 line.
+ - The clients who have Online Backup are less likely to live the company, with an odds of 0.72 compared to those who have not. 
+ - Monthly charges has a linear relation with the probability of Churn, in other words, the probability of leaving is higher as the MonthlyCharges become higher. The odds of leaving for every unit of Monthly Charges is 1.0344. This is also a very important variable in our model. 
+ - Those clients which have a shorter contract effect are more prone to leave than the others. We can see how the odds of leaving for Two year effect contracts is 0.11 compared to Month-to-Month. So the probability of leaving for those who have month-to-month contract are 9 times higher. 
+ - Paperless Billing has also an effect with an odds ratio of 1.42 of yes against no.
+ - Lastly we can check the effect of the interaction between Online Security and Tech Support. If the client has Tech Support will be less likely to leave, otherwise will be more likely to leave, especially if she/he has not Online Security either. 
 
-## Residual analysis with the best model
+We can see the effects on having an unbalanced dataset in our residual/Goodness of fit analysis.  We can interpret from the plots that our residuals are far more likely to have extreme positive values rather than negative ones. In fact they are very related to the conclusions of the model interpretation. As the combination of variables gets more prone to not churn we will see more influential values in the positive axis. 
+```{r,fig.width=10, fig.height=8}
+summary(mod7)
+vif(mod7)
+exp(mod7$coefficients) 
 
-```{r}
+par(mfrow=c(1,2))
+plot(allEffects(mod = mod7))
+sum( resid( mod7, "pearson") ^2 )
 
 residualPlots(mod7)
 influencePlot(mod7)
@@ -388,24 +400,6 @@ cook <- Boxplot(cooks.distance(mod7))
 cookd <- sort(cooks.distance(mod7)[cook], decreasing=TRUE)
 cookd
 length(rownames(train_new) %in% names(cookd)) #[1] 5282
-
-```
-
-
-## Model Interpretation and residual analysis
-
-```{r}
-summary(mod7)
-vif(mod7)
-exp(mod7$coefficients) 
-
-par(mfrow=c(1,2))
-plot(allEffects(mod = mod7))
-#avPlots(mod7) #es como el effect
-sum( resid( mod7, "pearson") ^2 )
-
-residualPlots(mod7)
-
 ```
 The final model has this form.
 
@@ -419,27 +413,8 @@ y = & -3.1427 \alpha + \beta_{\text{SeniorCitizen1}} 0.26 + \beta_{\text{tenure}
 \end{align*}
 $$
 
-From the effects plots and the betas we can draw the following conclusions:
-
- - Senior Citizen are more likely to Churn than no Senior Citizens as the have an odds of 1.3 against non senior citizens.
- - We can understand tenure very easily thanks to the plot of effects. We can see how old clients of the company (old in terms of months in the company) are less probable to live the company although it smoothes this behaviour as the client reaches 40 months, this is a very important variable in order to explain churns. 
- - Those clients who don't have a phone service have an odds of 3.2 for leaving compared to those who only have 1 line.
- - The clients who have Online Backup are less likely to live the company, with an odds of 0.72 compared to those who have not. 
- - Monthly charges has a linear relation with the probability of Churn, in other words, the probability of leaving is higher as the Montly Charges become higher. The odds of leaving for every unit of Monthly Charges is 1.0344. This is also a very important variable in our model. 
- - Those clients which have a shorter contract effect are more prone to leave than the others. We can see how the odds of leaving for Two year effect contracts is 0.11 compared to Month-to-Month. So the probability of leaving for those who have month-to-month contract are 9 times higher. 
- - Paperless Billing has also an effect with an odds ratio of 1.42 of yes against no.
- - Lastly we can check the effect of the interaction between Online Security and Tech Support. If the client has Tech Support will be less likely to leave, otherwise will be more likely to leave, especially if she/he has not Online Security either. 
-
-Residual analysis:
-
-We can see the effects on having an unbalanced dataset in our residual/Goodness of fit analysis.  We can interpret from the plots that our residuals are far more likely to have extreme positive values rather than negative ones. In fact they are very related to the conclusions of the model interpretation. As the combination of variables gets more prone to not churn we will see more influential values in the positive axis. 
-
-
-
-
-
+## Goodness of fit 
 ### Standarize test
-
 ```{r}
 test_new$OnlineBackup    <- test_new$OnlineBackup    %>% as.character()
 test_new$OnlineSecurity    <- test_new$OnlineSecurity    %>% as.character()
@@ -463,8 +438,9 @@ test_new$StreamingTV     <- test_new$StreamingTV     %>% as.factor()
 test_new$StreamingMovies <- test_new$StreamingMovies %>% as.factor()
 ```
 
-### Goodness of fit 
+We utilized 20% of our data to establish the goodness of fit, applying the final model to predict churn within our test set. Subsequently, we applied a 0.5 threshold, obtaining an accuracy of 0.83. Notwithstanding the semblance of a good fit, misleading interpretations could arise due to an imbalanced dataset. 
 
+Exploration of the metrics table highlights a F1 score of 0.62 and a recall of 0.57, providing a clearer picture. It led us to the decision of changing the threshold to 0.4 based on the Receiver Operating Characteristic (ROC) curve. Despite a minor decrease in accuracy to 0.81, we noted an improvement in the F1 score to 0.64 and a significant increase in recall (0.68). We consider this shift important because the company is more concerned about false positives since they have a greater impact on the business than false negatives.
 ```{r}
 final_model <- mod7
 dim(test_new)
@@ -487,15 +463,12 @@ GOF <- rbind(accuracy, Recall, Precision, F1)
 colnames(GOF) <- "Metrics"
 GOF %>% round(2) %>% knitr::kable()
 
-
-
 library("ROCR")
 dadesroc<-prediction(predict(final_model, newdata = test_new,type="response"),test_new$Churn)
 par(mfrow=c(1,2))
 plot(performance(dadesroc,"err"))
 plot(performance(dadesroc,"tpr","fpr"))
 abline(0,1,lty=2)
-
 
 predictions <- predict(final_model,test_new, type="response")
 test_new$PredictedChurn <- ifelse(predictions > 0.4,"Yes","No") %>% as.factor
@@ -517,10 +490,3 @@ colnames(GOF) <- "Metrics"
 GOF %>% round(2) %>% knitr::kable()
  ## F1 improves so we will keep the second threshold
 ```
-
-We utilized 20% of our data to establish the goodness of fit, applying the final model to predict churn within our test set. Subsequently, we applied a 0.5 threshold, obtaining an accuracy of 0.83. Notwithstanding the semblance of a good fit, misleading interpretations could arise due to an imbalanced dataset. 
-
-Exploration of the metrics table highlights a F1 score of 0.62 and a recall of 0.57, providing a clearer picture. It led us to the decision of changing the threshold to 0.4 based on the Receiver Operating Characteristic (ROC) curve. Despite a minor decrease in accuracy to 0.81, we noted an improvement in the F1 score to 0.64 and a significant increase in recall (0.68). We consider this shift important because the company is more concerned about false positives since they have a greater impact on the business than false negatives.
-
-
-
